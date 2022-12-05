@@ -2,6 +2,7 @@ import glob, re, os
 
 # Configuration
 template = "../components/test-01/my-component.astro"
+template = "../components/test-01/simple-compo-01.astro"
 convert_html_comments_to_twig = True
 use_only_for_twig_parameters = True
 astro_components_alias = '@components'
@@ -20,10 +21,10 @@ def split_frontmatter_lines(text):
     lines = text.split('\n')
     return list(filter(lambda x: x != '', lines))
 
-def replace_common_attributes(attributeName):
+def replace_common_attributes(attribute_name):
     for key, value in common_attributes_replacements.items():
-        attributeName = attributeName.replace(key, value)
-    return attributeName
+        attribute_name = attribute_name.replace(key, value)
+    return attribute_name
 
 def extract_frontmatter_components(lines):
     components = []
@@ -44,6 +45,15 @@ def convert_comments(body):
     if convert_html_comments_to_twig:
         body = re.sub(r'<!--(.*?)-->', r'{# -- \1 -- #}', body)
     return body
+
+def attributes_to_twig_params(match):
+    attribute_name = ''
+    attribute_value = ''
+    if match.group(4):
+       attribute_value = match.group(4)
+    if match.group(2):
+       attribute_name = match.group(2)
+    return '%s: %s,' % (attribute_name, attribute_value)
 
 def auto_closing_astro_tag_to_twig_include(match, compo):
     """
@@ -67,30 +77,48 @@ def auto_closing_astro_tag_to_twig_include(match, compo):
         params_template = 'with { _PARAMS_ } only' if use_only_for_twig_parameters else 'with { _PARAMS_ }'
         statement = '{%% include "%s" %s %%}' % (compo["file"], params_template)
     if match.group(2) is not None:
+        group = match.group(2)
+        print('match.group(2) -> ', group)
         parts = []
-        attributes = re.split(r'([^=]+=".*"+)', match.group(2))
-        attributes = list(filter(lambda x: x != '', attributes))
-        for attribute in attributes:
-            result = re.match(r'^([^=]+)=(".*"+)$', attribute.strip())
-            if result is not None:
-                attributeName = replace_common_attributes(result.group(1))
-                parts.append(': '.join([attributeName, result.group(2)]))
+        html_attributes_pattern = r'([^=]+=".*"+)'
+        dynamic_attributes_pattern = r'(([^\s]+)=({([^{}]+)}))+'
+        if re.match(html_attributes_pattern, group):
+            attributes = re.split(r'([^=]+=".*"+)', group)
+            attributes = list(filter(lambda x: x != '', attributes))
+            for attribute in attributes:
+                result = re.match(r'^([^=]+)=(".*"+)$', attribute.strip())
+                if result is not None:
+                    attribute_name = replace_common_attributes(result.group(1))
+                    parts.append(': '.join([attribute_name, result.group(2)]))
+        elif re.match(dynamic_attributes_pattern, group):
+            twig_params = re.sub(dynamic_attributes_pattern, attributes_to_twig_params, group).rstrip().rstrip(',')
+            parts.append(twig_params)
         params = ', '.join(parts)
     statement = statement.replace('_PARAMS_', params)
 
     return statement
 
+def attributes_to_twig(match):
+    attribute_name = ''
+    attribute_value = ''
+    if match.group(4):
+       attribute_value = '{{ %s }}' % (match.group(4))
+    if match.group(2):
+       attribute_name = match.group(2)
+    return ' %s="%s"' % (attribute_name, attribute_value)
+
 def convert_body(body, components):
     # Convert html comments to twig
     body = convert_comments(body)
-    output = []
+    # Parse components
     for compo in components:
-        pattern = rf'(<{compo["name"]})\s*(.*)\s*\/>'
-        result = re.sub(pattern, lambda match, compo=compo: auto_closing_astro_tag_to_twig_include(match, compo), body)
+        pattern = rf'(<{compo["name"]})\s+([^\/>]*)\s*\/>'
+        body = re.sub(pattern, lambda match, compo=compo: auto_closing_astro_tag_to_twig_include(match, compo), body)
 
-        print(result)
-        # if result != None:
-        #     print(result.group(0))
+    # Convert dynamic attributes to twig: foo={bar} -> foo="{{ bar }}"
+    body = re.sub(r'\s+(([^\s]+)=({([^{}]+)}))+', attributes_to_twig, body)
+
+    return body
 
 
 for fileName in glob.glob(cwd + template):
@@ -108,8 +136,7 @@ for fileName in glob.glob(cwd + template):
         print(components)
 
         body = parts[2]
-        # print(body)
-
-        convert_body(body, components)
+        body = convert_body(body, components)
+        print(body)
         # print(frontmatter)
 
