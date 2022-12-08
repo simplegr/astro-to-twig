@@ -5,7 +5,7 @@ template = "../components/test-01/my-component.astro"
 template = "../components/test-01/simple-compo-01.astro"
 # template = "../components/test-01/*.astro"
 convert_html_comments_to_twig = True
-use_only_for_twig_parameters = True
+use_only_for_twig_parameters = False
 astro_components_alias = "@components"
 twig_components_alias = "_components"
 
@@ -61,6 +61,24 @@ def attributes_to_twig_params(match):
     return "%s: %s," % (attribute_name, attribute_value)
 
 
+def parse_html_attributes(text, parts, is_dynamic=False):
+    html_attributes_pattern = r'([^=]+=".*"+)'
+    if re.match(html_attributes_pattern, text):
+        attributes = re.split(html_attributes_pattern, text)
+        attributes = list(filter(lambda x: x != "", attributes))
+        for attribute in attributes:
+            result = re.match(r'^([^=]+)=(".*"+)$', attribute.strip())
+            if result is not None:
+                attribute_name = replace_common_attributes(result.group(1))
+                parts.append(": ".join([attribute_name, result.group(2)]))
+            # only in case of dynamic attributes
+            elif is_dynamic:
+                parts.append(attribute)
+    else:
+        parts.append(text)
+    return parts
+
+
 def auto_closing_astro_tag_to_twig_include(match, compo):
     """
     Converts auto closing Astro tags to Twig. Examples:
@@ -90,26 +108,26 @@ def auto_closing_astro_tag_to_twig_include(match, compo):
         group = match.group(2)
         # print('match.group(2) -> ', group)
         parts = []
-        html_attributes_pattern = r'([^=]+=".*"+)'
-        dynamic_attributes_pattern = r"(([^\s]+)=({([^{}]+)}))+"
+
         # dynamic attributes
+        dynamic_attributes_pattern = r"(([^\s]+)=({([^{}]+)}))+"
         if re.match(dynamic_attributes_pattern, group):
             twig_params = (
                 re.sub(dynamic_attributes_pattern, attributes_to_twig_params, group)
                 .rstrip()
                 .rstrip(",")
             )
-            parts.append(twig_params)
+            parts = parse_html_attributes(twig_params, parts, is_dynamic=True)
         # plain html attributes
-        elif re.match(html_attributes_pattern, group):
-            attributes = re.split(r'([^=]+=".*"+)', group)
-            attributes = list(filter(lambda x: x != "", attributes))
-            for attribute in attributes:
-                result = re.match(r'^([^=]+)=(".*"+)$', attribute.strip())
-                if result is not None:
-                    attribute_name = replace_common_attributes(result.group(1))
-                    parts.append(": ".join([attribute_name, result.group(2)]))
-        params = ", ".join(parts)
+        else:
+            parts = parse_html_attributes(group, parts)
+
+        # strip extra white space in each part
+        parts = map(lambda x: re.sub(r"\s+", " ", x), parts)
+
+        # strip extra white space after join
+        params = re.sub(r"\s+", " ", ", ".join(parts))
+
     statement = statement.replace("_PARAMS_", params)
     return statement
 
