@@ -1,4 +1,3 @@
-components/svg
-components/test-02
+astro
 *.twig
 dist

@@ -4,10 +4,12 @@ import glob, re, os
 template = "components/test-01/my-component.astro"
 template = "components/test-01/simple-compo-01.astro"
 # template = "components/test-01/*.astro"
+# template = "**/*.astro"
 convert_html_comments_to_twig = True
 use_only_for_twig_parameters = False
 astro_components_alias = "@components"
 twig_components_alias = "_components"
+astro_dir="astro/src"
 dist_dir = "dist"
 
 # Attributes that will be replaced
@@ -188,12 +190,12 @@ def convert_body(body, components):
 
     return body
 
-
-for fileName in glob.glob(root_dir + template):
+for fileName in glob.glob(root_dir + astro_dir + os.sep + template, recursive=True):
     # Read the .astro file
     astroFile = open(fileName, "r", encoding="utf8")
     # Write .twig file
-    twigFileName = fileName.replace(root_dir, dist_path).replace(".astro", ".twig")
+    twigFileName = fileName.replace(astro_dir + os.sep, '').replace(root_dir, dist_path).replace(".astro", ".twig")
+
     # Create required directories
     os.makedirs(os.path.dirname(twigFileName), exist_ok=True)
     twigFile = open(twigFileName, "w", encoding="utf8")
