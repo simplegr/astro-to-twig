@@ -1,3 +1,4 @@
 components/svg
 components/test-02
 *.twig
+dist

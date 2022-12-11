@@ -1,20 +1,22 @@
 import glob, re, os
 
 # Configuration
-template = "../components/test-01/my-component.astro"
-template = "../components/test-01/simple-compo-01.astro"
-# template = "../components/test-01/*.astro"
+template = "components/test-01/my-component.astro"
+template = "components/test-01/simple-compo-01.astro"
+# template = "components/test-01/*.astro"
 convert_html_comments_to_twig = True
 use_only_for_twig_parameters = False
 astro_components_alias = "@components"
 twig_components_alias = "_components"
+dist_dir = "dist"
 
 # Attributes that will be replaced
 common_attributes_replacements = {
     "classes": "class",
 }
 
-cwd = os.path.dirname(os.path.realpath(__file__)) + os.sep
+root_dir = os.path.realpath(".") + os.sep
+dist_path = root_dir + dist_dir + os.sep
 
 ####
 
@@ -109,7 +111,7 @@ def auto_closing_astro_tag_to_twig_include(match, compo):
         # print('match.group(2) -> ', group)
         parts = []
 
-        # dynamic attributes
+        # Dynamic attributes
         dynamic_attributes_pattern = r"(([^\s]+)=({([^{}]+)}))+"
         if re.match(dynamic_attributes_pattern, group):
             twig_params = (
@@ -118,14 +120,14 @@ def auto_closing_astro_tag_to_twig_include(match, compo):
                 .rstrip(",")
             )
             parts = parse_html_attributes(twig_params, parts, is_dynamic=True)
-        # plain html attributes
+        # Plain html attributes
         else:
             parts = parse_html_attributes(group, parts)
 
-        # strip extra white space in each part
+        # Strip extra white space in each part
         parts = map(lambda x: re.sub(r"\s+", " ", x), parts)
 
-        # strip extra white space after join
+        # Strip extra white space after join
         params = re.sub(r"\s+", " ", ", ".join(parts))
 
     statement = statement.replace("_PARAMS_", params)
@@ -187,15 +189,18 @@ def convert_body(body, components):
     return body
 
 
-for fileName in glob.glob(cwd + template):
+for fileName in glob.glob(root_dir + template):
     # Read the .astro file
     astroFile = open(fileName, "r", encoding="utf8")
     # Write .twig file
-    twigFile = open(fileName.replace(".astro", ".twig"), "w", encoding="utf8")
+    twigFileName = fileName.replace(root_dir, dist_path).replace(".astro", ".twig")
+    # Create required directories
+    os.makedirs(os.path.dirname(twigFileName), exist_ok=True)
+    twigFile = open(twigFileName, "w", encoding="utf8")
 
     print("Converting file %s" % twigFile.name)
 
-    # split frontmatter and content
+    # Split frontmatter and content
     parts = re.split(r"---", astroFile.read())
 
     if len(parts) == 3:
