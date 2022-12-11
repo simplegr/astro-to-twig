@@ -11,7 +11,7 @@ convert_html_comments_to_twig = True
 use_only_for_twig_parameters = False
 astro_components_alias = "@components"
 twig_components_alias = "_components"
-astro_dir="astro/src"
+astro_dir = "astro/src"
 dist_dir = "dist"
 
 # Attributes that will be replaced
@@ -114,7 +114,11 @@ def auto_closing_astro_tag_to_twig(match, compo, include_statement=True):
             if use_only_for_twig_parameters
             else "with { _PARAMS_ }"
         )
-        statement = '{%% %s "%s" %s %%}' % ('include' if include_statement else 'embed', compo["file"], params_template)
+        statement = '{%% %s "%s" %s %%}' % (
+            "include" if include_statement else "embed",
+            compo["file"],
+            params_template,
+        )
     if match.group(2) is not None:
         group = match.group(2)
         # print('match.group(2) -> ', group)
@@ -142,7 +146,7 @@ def auto_closing_astro_tag_to_twig(match, compo, include_statement=True):
     statement = statement.replace("_PARAMS_", params)
 
     # Remove empty with
-    statement = statement.replace(" with {  }", '')
+    statement = statement.replace(" with {  }", "")
 
     # Embed should have a block inside
     if not include_statement:
@@ -192,9 +196,7 @@ def convert_body(body, components):
         pattern = rf'(<{compo["name"]})\s*([^\/>]*)\s*\/>'
         body = re.sub(
             pattern,
-            lambda match, compo=compo: auto_closing_astro_tag_to_twig(
-                match, compo
-            ),
+            lambda match, compo=compo: auto_closing_astro_tag_to_twig(match, compo),
             body,
         )
         # Embed
@@ -215,13 +217,22 @@ def convert_body(body, components):
     # Convert content that matches common attributes. Example: {{ classes }} -> {{ class }}
     body = re.sub(r"{{(\s*)(.*)(\s+)}}", common_attributes_as_content, body)
 
+    # Convert content inside html tags to twig output statement: {foo} -> {{ foo }}
+    # This is a 2nd pass with different regex.
+    body = re.sub(r"([^{]){\s*([^<{}\s]+)\s*}([^}])", r"\1{{ \2 }}\3", body)
+
     return body
+
 
 for fileName in glob.glob(root_dir + astro_dir + os.sep + template, recursive=True):
     # Read the .astro file
     astroFile = open(fileName, "r", encoding="utf8")
     # Write .twig file
-    twigFileName = fileName.replace(astro_dir + os.sep, '').replace(root_dir, dist_path).replace(".astro", ".twig")
+    twigFileName = (
+        fileName.replace(astro_dir + os.sep, "")
+        .replace(root_dir, dist_path)
+        .replace(".astro", ".twig")
+    )
 
     # Create required directories
     os.makedirs(os.path.dirname(twigFileName), exist_ok=True)
