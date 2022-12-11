@@ -3,6 +3,8 @@ import glob, re, os
 # Configuration
 template = "components/test-01/my-component.astro"
 template = "components/test-01/simple-compo-01.astro"
+# template = "components/test-01/news.astro"
+template = "components/test-01/footer.astro"
 # template = "components/test-01/*.astro"
 # template = "**/*.astro"
 convert_html_comments_to_twig = True
@@ -83,7 +85,7 @@ def parse_html_attributes(text, parts, is_dynamic=False):
     return parts
 
 
-def auto_closing_astro_tag_to_twig_include(match, compo):
+def auto_closing_astro_tag_to_twig(match, compo, include_statement=True):
     """
     Converts auto closing Astro tags to Twig. Examples:
 
@@ -92,9 +94,14 @@ def auto_closing_astro_tag_to_twig_include(match, compo):
 
     {% include "_components/my-component.twig" with { foo: "bar", baz: something } %}
 
+    or:
+
+    {% embed "_components/my-component.twig" with { foo: "bar", baz: something } %}
+
     Args:
         match (dictionary): re.sub's match object.
         compo (dictionary): matched component.
+        include_statement (boolean): the twig statement that will be used. Defaults to 'include'
 
     Returns:
         string: _description_
@@ -107,7 +114,7 @@ def auto_closing_astro_tag_to_twig_include(match, compo):
             if use_only_for_twig_parameters
             else "with { _PARAMS_ }"
         )
-        statement = '{%% include "%s" %s %%}' % (compo["file"], params_template)
+        statement = '{%% %s "%s" %s %%}' % ('include' if include_statement else 'embed', compo["file"], params_template)
     if match.group(2) is not None:
         group = match.group(2)
         # print('match.group(2) -> ', group)
@@ -133,6 +140,14 @@ def auto_closing_astro_tag_to_twig_include(match, compo):
         params = re.sub(r"\s+", " ", ", ".join(parts))
 
     statement = statement.replace("_PARAMS_", params)
+
+    # Remove empty with
+    statement = statement.replace(" with {  }", '')
+
+    # Embed should have a block inside
+    if not include_statement:
+        statement = statement + "\n\t{% block slot %}"
+
     return statement
 
 
@@ -173,14 +188,26 @@ def convert_body(body, components):
 
     # Parse components
     for compo in components:
-        pattern = rf'(<{compo["name"]})\s+([^\/>]*)\s*\/>'
+        # Include
+        pattern = rf'(<{compo["name"]})\s*([^\/>]*)\s*\/>'
         body = re.sub(
             pattern,
-            lambda match, compo=compo: auto_closing_astro_tag_to_twig_include(
+            lambda match, compo=compo: auto_closing_astro_tag_to_twig(
                 match, compo
             ),
             body,
         )
+        # Embed
+        pattern = rf'(<{compo["name"]})\s*([^>]*)\s*>'
+        body = re.sub(
+            pattern,
+            lambda match, compo=compo: auto_closing_astro_tag_to_twig(
+                match, compo, False
+            ),
+            body,
+        )
+        pattern = rf'(<\/{compo["name"]})>'
+        body = re.sub(pattern, "\t{% endblock %}\n\t{% endembed %}", body)
 
     # Convert dynamic attributes to twig: foo={bar} -> foo="{{ bar }}"
     body = re.sub(r"\s+(([^\s]+)=({([^{}]+)}))+", attributes_to_twig, body)
