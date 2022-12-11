@@ -214,4 +214,4 @@ for fileName in glob.glob(root_dir + astro_dir + os.sep + template, recursive=Tr
         body = convert_body(body, components)
         # print(body)
 
-        twigFile.write(body)
+        twigFile.write(body.lstrip())
